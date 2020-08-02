@@ -1,5 +1,6 @@
 use recursive::recursive;
 
+#[allow(unused)]
 #[recursive]
 fn sum(n: u64, a: u64) -> u64 {
     match n {
@@ -20,5 +21,5 @@ fn sum(n: u64, a: u64) -> u64 {
 */
 
 fn main() {
-    println!("Result: {}", sum(10, 0));
+    // println!("Result: {}", sum(10, 0));
 }
