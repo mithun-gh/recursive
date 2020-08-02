@@ -1,6 +1,6 @@
-use syn::*;
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
+use syn::*;
 
 pub fn extract_fn_arg_pat(arg: FnArg) -> Box<Pat> {
     match arg {
@@ -21,5 +21,7 @@ pub fn extract_fn_arg_type(arg: FnArg) -> Box<Type> {
 }
 
 pub fn extract_fn_arg_types(args: Punctuated<FnArg, Comma>) -> Vec<Box<Type>> {
-    args.into_iter().map(extract_fn_arg_type).collect::<Vec<_>>()
+    args.into_iter()
+        .map(extract_fn_arg_type)
+        .collect::<Vec<_>>()
 }

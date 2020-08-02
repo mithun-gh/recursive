@@ -1,7 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::*;
 use syn::visit_mut::VisitMut;
+use syn::*;
 
 mod utils;
 
@@ -45,7 +45,7 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     input_pats.iter().for_each(|i| println!("? {:?}", i));
     input_types.iter().for_each(|i| println!("! {:?}", i));
 
-    // FnVisitor.visit_item_fn_mut(&mut item);    
+    // FnVisitor.visit_item_fn_mut(&mut item);
 
-    (quote!{ #item }).into()
+    (quote! { #item }).into()
 }
