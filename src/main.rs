@@ -8,6 +8,16 @@ fn sum(n: u64, a: u64) -> u64 {
     }
 }
 
+// fn sum(n: u64, a: u64) -> u64 {
+//     enum Action<C, R> {
+//         Continue(C),
+//         Return(R),
+//     }
+//     fn sum_inner((n, a): (u64, u64)) -> Action<(u64, u64), u64> {
+//         Action::Return(42)
+//     }
+// }
+
 // enum Action<B, C> {
 //     Break(B),
 //     Continue(C),

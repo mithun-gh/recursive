@@ -1,17 +1,11 @@
 #![allow(unused)]
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, format_ident};
 use syn::punctuated::Punctuated;
 use syn::token::Comma;
 use syn::visit_mut::VisitMut;
 use syn::*;
-
-#[derive(Debug)]
-enum Action<C, R> {
-    Continue(C),
-    Return(R),
-}
 
 macro_rules! make {
     ($make_type:ty, $($tokens:tt)+) => {
@@ -39,41 +33,69 @@ impl VisitMut for FnVisitor {
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let item = parse_macro_input!(item as ItemFn);
 
-    // let input_pats = utils::extract_fn_arg_pats(item.sig.inputs.clone());
-    // let input_types = utils::extract_fn_arg_types(item.sig.inputs.clone());
+    let fn_name =  item.sig.ident.clone();
+    let fn_name_inner = format_ident!("{}_inner", fn_name);
+    let inputs = item.sig.inputs.clone();
+    let input_pats = extract_fn_arg_pats(item.sig.inputs.clone());
+    let input_types = extract_fn_arg_types(item.sig.inputs.clone());
+    let return_type = extract_return_type(item.sig.output.clone());
+    let fn_body = item.block.clone();
 
-    // let tuple: TypeTuple = parse_quote! {
-    //     (#(input_types),+)
-    // };
+    if return_type.is_some() {
+        println!("{}", quote! {
+            fn #fn_name(#inputs) -> #return_type {
+                enum Action<C, R> {
+                    Continue(C),
+                    Return(R),
+                }
 
-    // input_pats.iter().for_each(|i| println!("? {:?}", i));
-    // input_types.iter().for_each(|i| println!("! {:?}", i));
+                fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
+                    -> Action<(#(#input_types),*), #return_type>
+                    #fn_body
+
+                let mut acc = (#(#input_pats),*);
+                loop {
+                    match #fn_name_inner(acc) {
+                        Action::Return(r) => return r,
+                        Action::Continue(c) => acc = c,
+                    }
+                }
+            }
+        });
+    }
 
     // FnVisitor.visit_item_fn_mut(&mut item);
 
     (quote! { #item }).into()
 }
 
-fn extract_fn_arg_pat(arg: FnArg) -> Box<Pat> {
+fn extract_fn_arg_pat(arg: FnArg) -> Pat {
     match arg {
-        FnArg::Typed(pt) => pt.pat,
+        FnArg::Typed(pt) => *pt.pat,
         _ => panic!("not supported on the receiver type `self`"),
     }
 }
 
-fn extract_fn_arg_pats(args: Punctuated<FnArg, Comma>) -> Vec<Box<Pat>> {
+fn extract_fn_arg_pats(args: Punctuated<FnArg, Comma>) -> Vec<Pat> {
     args.into_iter().map(extract_fn_arg_pat).collect::<Vec<_>>()
 }
 
-fn extract_fn_arg_type(arg: FnArg) -> Box<Type> {
+fn extract_fn_arg_type(arg: FnArg) -> Type {
     match arg {
-        FnArg::Typed(pt) => pt.ty,
+        FnArg::Typed(pt) => *pt.ty,
         _ => panic!("not supported on the receiver type `self`"),
     }
 }
 
-fn extract_fn_arg_types(args: Punctuated<FnArg, Comma>) -> Vec<Box<Type>> {
+fn extract_fn_arg_types(args: Punctuated<FnArg, Comma>) -> Vec<Type> {
     args.into_iter()
         .map(extract_fn_arg_type)
         .collect::<Vec<_>>()
+}
+
+fn extract_return_type(output: ReturnType) -> Option<Type> {
+    match output {
+        ReturnType::Type(_, return_type) => Some(*return_type),
+        ReturnType::Default => None
+    }
 }
