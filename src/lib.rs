@@ -7,30 +7,28 @@ use syn::token::Comma;
 use syn::visit_mut::VisitMut;
 use syn::*;
 
+macro_rules! verbatim {
+    ($($tokens:tt)*) => {
+        Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
+    };
+}
+
 struct FnVisitor;
 
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
-        if node.expr.is_none() {
-            node.expr = Some(Box::new(Expr::Verbatim(quote! {
-                Action::Return(())
-            })));
-        }
-
-        let t = node.expr.clone().unwrap();
-        match *t {
-            Expr::Call(expr_call) => {
-                let args = expr_call.args;
-                node.expr = Some(Box::new(Expr::Verbatim(quote! {
-                    Action::Continue((#args))
-                })));
-            }
-            expr => {
-                node.expr = Some(Box::new(Expr::Verbatim(quote! {
-                    Action::Return(#expr)
-                })));
-            }
-        }
+        node.expr = match node.expr.clone() {
+            None => verbatim! { Action::Return(()) },
+            Some(some_expr) => match *some_expr {
+                Expr::Call(expr_call) => {
+                    let args = expr_call.args;
+                    verbatim! { Action::Continue((#args)) }
+                }
+                expr => {
+                    verbatim! { Action::Return(#expr) }
+                }
+            },
+        };
     }
 }
 
