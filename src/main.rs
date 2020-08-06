@@ -30,6 +30,16 @@ fn sum(n: u64, a: u64) -> u64 {
 //     }
 // }
 
+// #[recursive]
+// fn greet_indefnitely() {
+//     let m = 0;
+//     if m == 1 {
+//         std::process::exit(0);
+//     }
+//     greet_indefnitely();
+// }
+
 fn main() {
+    // greet_indefnitely();
     println!("Result: {}", sum(10, 0));
 }
