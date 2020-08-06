@@ -7,31 +7,38 @@ use syn::token::Comma;
 use syn::visit_mut::VisitMut;
 use syn::*;
 
-macro_rules! make {
-    ($make_type:ty, $($tokens:tt)+) => {
-        parse::<$make_type>(TokenStream::from(quote! { $($tokens)+ })).unwrap()
-    };
-}
-
 struct FnVisitor;
 
 impl VisitMut for FnVisitor {
-    fn visit_return_type_mut(&mut self, return_ty: &mut ReturnType) {
-        // let t = make!(ReturnType, -> String);
-
-        println!("!!! {:?}", return_ty);
-
-        if let ReturnType::Type(_, type_details) = return_ty {
-            println!("!!! {}", quote!(-> Action<#type_details>));
+    fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
+        if node.expr.is_none() {
+            node.expr = Some(Box::new(Expr::Verbatim(quote! {
+                Action::Return(())
+            })));
         }
 
-        // *return_ty = t;
+        let t = node.expr.clone().unwrap();
+        match *t {
+            Expr::Call(expr_call) => {
+                let args = expr_call.args;
+                node.expr = Some(Box::new(Expr::Verbatim(quote! {
+                    Action::Continue((#args))
+                })));
+            }
+            expr => {
+                node.expr = Some(Box::new(Expr::Verbatim(quote! {
+                    Action::Return(#expr)
+                })));
+            }
+        }
     }
 }
 
 #[proc_macro_attribute]
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(item as ItemFn);
+    let mut item = parse_macro_input!(item as ItemFn);
+
+    FnVisitor.visit_item_fn_mut(&mut item);
 
     let fn_name = item.sig.ident.clone();
     let fn_name_inner = format_ident!("{}_inner", fn_name);
@@ -41,33 +48,29 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let return_type = extract_return_type(item.sig.output.clone());
     let fn_body = item.block.clone();
 
-    println!(
-        "{}",
-        quote! {
-            fn #fn_name(#inputs) -> #return_type {
-                enum Action<C, R> {
-                    Continue(C),
-                    Return(R),
-                }
+    // let mut last_stmt = item.block.stmts.last().unwrap().clone();
 
-                fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
-                    -> Action<(#(#input_types),*), #return_type>
-                    #fn_body
+    (quote! {
+        fn #fn_name(#inputs) -> #return_type {
+            enum Action<C, R> {
+                Continue(C),
+                Return(R),
+            }
 
-                let mut acc = (#(#input_pats),*);
-                loop {
-                    match #fn_name_inner(acc) {
-                        Action::Return(r) => return r,
-                        Action::Continue(c) => acc = c,
-                    }
+            fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
+                -> Action<(#(#input_types),*), #return_type>
+                #fn_body
+
+            let mut acc = (#(#input_pats),*);
+            loop {
+                match #fn_name_inner(acc) {
+                    Action::Return(r) => return r,
+                    Action::Continue(c) => acc = c,
                 }
             }
         }
-    );
-
-    // FnVisitor.visit_item_fn_mut(&mut item);
-
-    (quote! { #item }).into()
+    })
+    .into()
 }
 
 fn extract_fn_arg_pat(arg: FnArg) -> Pat {
