@@ -8,6 +8,16 @@ fn sum(n: u64, a: u64) -> u64 {
     }
 }
 
+#[recursive]
+fn factorial(n: u64, a: u64) -> u64 {
+    if n == 0 {
+        return a;
+    } else {
+        return factorial(n - 1, n * a);
+    }
+}
+
 fn main() {
-    println!("Result: {}", sum(999_999_999, 0));
+    println!("Result: {}", sum(999_999, 0));
+    println!("Result: {}", factorial(10, 1));
 }
