@@ -13,7 +13,9 @@ macro_rules! verbatim {
     };
 }
 
-struct FnVisitor;
+struct FnVisitor {
+    fn_name: Ident,
+}
 
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
@@ -21,8 +23,15 @@ impl VisitMut for FnVisitor {
             None => verbatim! { Action::Return(()) },
             Some(some_expr) => match *some_expr {
                 Expr::Call(expr_call) => {
-                    let args = expr_call.args;
-                    verbatim! { Action::Continue((#args)) }
+                    let func = expr_call.func.clone();
+                    let func_id: Ident = parse_quote!(#func);
+
+                    if func_id != self.fn_name {
+                        verbatim! { Action::Return(#expr_call) }
+                    } else {
+                        let args = expr_call.args;
+                        verbatim! { Action::Continue((#args)) }
+                    }
                 }
                 _ => {
                     verbatim! { Action::Return(#some_expr) }
@@ -36,7 +45,9 @@ impl VisitMut for FnVisitor {
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemFn);
 
-    FnVisitor.visit_item_fn_mut(&mut item);
+    let mut fn_visitor = FnVisitor { fn_name: item.sig.ident.clone() };
+
+    fn_visitor.visit_item_fn_mut(&mut item);
 
     let fn_name = item.sig.ident.clone();
     let fn_name_inner = format_ident!("{}_inner", fn_name);
@@ -48,7 +59,7 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // let mut last_stmt = item.block.stmts.last().unwrap().clone();
 
-    (quote! {
+    let iter_fn = quote! {
         fn #fn_name(#inputs) -> #return_type {
             enum Action<C, R> {
                 Continue(C),
@@ -67,8 +78,11 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
             }
         }
-    })
-    .into()
+    };
+
+    // println!("{}", iter_fn);
+
+    iter_fn.into()
 }
 
 fn extract_fn_arg_pat(arg: FnArg) -> Pat {
