@@ -24,8 +24,8 @@ impl VisitMut for FnVisitor {
                     let args = expr_call.args;
                     verbatim! { Action::Continue((#args)) }
                 }
-                expr => {
-                    verbatim! { Action::Return(#expr) }
+                _ => {
+                    verbatim! { Action::Return(#some_expr) }
                 }
             },
         };
