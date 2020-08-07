@@ -11,7 +11,7 @@ macro_rules! verbatim {
     (boxed, $($tokens:tt)*) => {
         Box::new(Expr::Verbatim(quote! { $($tokens)* }))
     };
-    (option:boxed, $($tokens:tt)*) => {
+    (option, $($tokens:tt)*) => {
         Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
     };
     ($($tokens:tt)*) => {
@@ -26,7 +26,7 @@ struct FnVisitor {
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
         node.expr = match node.expr.clone() {
-            None => verbatim!(option: boxed, Action::Return(())),
+            None => verbatim!(option, Action::Return(())),
             Some(some_expr) => Some(get_action_variant(*some_expr, self.fn_name.clone())),
         };
     }
