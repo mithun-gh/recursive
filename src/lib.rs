@@ -9,7 +9,7 @@ use syn::*;
 
 macro_rules! verbatim {
     ($($tokens:tt)*) => {
-        Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
+        Box::new(Expr::Verbatim(quote! { $($tokens)* }))
     };
 }
 
@@ -20,34 +20,59 @@ struct FnVisitor {
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
         node.expr = match node.expr.clone() {
-            None => verbatim! { Action::Return(()) },
-            Some(some_expr) => match *some_expr {
-                Expr::Call(expr_call) => {
-                    let func = expr_call.func.clone();
-                    let func_id: Ident = parse_quote!(#func);
-
-                    if func_id != self.fn_name {
-                        verbatim! { Action::Return(#expr_call) }
-                    } else {
-                        let args = expr_call.args;
-                        verbatim! { Action::Continue((#args)) }
-                    }
-                }
-                _ => {
-                    verbatim! { Action::Return(#some_expr) }
-                }
-            },
+            None => Some(verbatim! { Action::Return(()) }),
+            Some(some_expr) => Some(get_action_variant(*some_expr, self.fn_name.clone())),
         };
+    }
+}
+
+fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
+    match expr {
+        Expr::Call(expr_call) => {
+            let func = expr_call.func.clone();
+            let func_id: Ident = parse_quote!(#func);
+
+            if func_id != fn_name {
+                verbatim! { Action::Return(#expr_call) }
+            } else {
+                let args = expr_call.args;
+                verbatim! { Action::Continue((#args)) }
+            }
+        }
+        _ => {
+            verbatim! { Action::Return(#expr) }
+        }
+    }
+}
+
+struct StmtVisitor {
+    fn_name: Ident,
+}
+
+impl VisitMut for StmtVisitor {
+    fn visit_expr_mut(&mut self, node: &mut Expr) {
+        match node {
+            Expr::Match(expr) => {
+                expr.arms.iter_mut()
+                    .for_each(|arm| {
+                        arm.body = get_action_variant(*arm.body.clone(), self.fn_name.clone());
+                    })
+            },
+            expr => {},
+        }
     }
 }
 
 #[proc_macro_attribute]
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemFn);
+    let mut last_stmt = item.block.stmts.last().unwrap().clone();
 
     let mut fn_visitor = FnVisitor { fn_name: item.sig.ident.clone() };
+    let mut stmt_visitor = StmtVisitor { fn_name: item.sig.ident.clone() };
 
     fn_visitor.visit_item_fn_mut(&mut item);
+    stmt_visitor.visit_stmt_mut(&mut last_stmt);
 
     let fn_name = item.sig.ident.clone();
     let fn_name_inner = format_ident!("{}_inner", fn_name);
@@ -56,8 +81,6 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_types = extract_fn_arg_types(item.sig.inputs.clone());
     let return_type = extract_return_type(item.sig.output.clone());
     let fn_body = item.block.clone();
-
-    // let mut last_stmt = item.block.stmts.last().unwrap().clone();
 
     let iter_fn = quote! {
         fn #fn_name(#inputs) -> #return_type {
@@ -80,7 +103,7 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // println!("{}", iter_fn);
+    println!("{}", iter_fn);
 
     iter_fn.into()
 }
