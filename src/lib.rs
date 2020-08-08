@@ -25,10 +25,7 @@ struct FnVisitor {
 
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
-        node.expr = match node.expr.clone() {
-            None => verbatim!(some, Action::Return(())),
-            Some(some_expr) => Some(get_action_variant(*some_expr, self.fn_name.clone())),
-        };
+        process_return_stmt(node, &self.fn_name);
     }
 }
 
@@ -47,6 +44,13 @@ fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
         }
         _ => verbatim!(boxed, Action::Return(#expr)),
     }
+}
+
+fn process_return_stmt(node: &mut ExprReturn, fn_name: &Ident) {
+    node.expr = match node.expr.clone() {
+        None => verbatim!(some, Action::Return(())),
+        Some(some_expr) => Some(get_action_variant(*some_expr, fn_name.clone())),
+    };
 }
 
 fn process_last_stmt(expr: &mut Expr, fn_name: &Ident) {
