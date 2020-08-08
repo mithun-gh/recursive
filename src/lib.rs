@@ -10,16 +10,19 @@ use syn::*;
 #[proc_macro_attribute]
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut item = parse_macro_input!(item as ItemFn);
-    let mut last_stmt = item.block.stmts.last().unwrap().clone();
 
     let mut fn_visitor = FnVisitor {
         fn_name: item.sig.ident.clone(),
     };
+
+    fn_visitor.visit_item_fn_mut(&mut item);
+
+    let mut last_stmt = item.block.stmts.last().unwrap().clone();
+
     let mut stmt_visitor = StmtVisitor {
         fn_name: item.sig.ident.clone(),
     };
 
-    fn_visitor.visit_item_fn_mut(&mut item);
     stmt_visitor.visit_stmt_mut(&mut last_stmt);
 
     let fn_name = item.sig.ident.clone();
