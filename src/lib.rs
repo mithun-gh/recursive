@@ -49,20 +49,41 @@ fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
     }
 }
 
+fn process_last_stmt(expr: &mut Expr, fn_name: &Ident) {
+    match expr {
+        Expr::Match(expr) => expr.arms.iter_mut().for_each(|arm| {
+            arm.body = get_action_variant(*arm.body.clone(), fn_name.clone());
+        }),
+        Expr::If(expr) => {
+            if let Some(last_stmt) = expr.then_branch.stmts.last_mut() {
+                if let Stmt::Expr(expr) = last_stmt {
+                    *expr = *get_action_variant(expr.clone(), fn_name.clone());
+                }
+            }
+            if let Some((_, ref mut expr)) = &mut expr.else_branch {
+                process_last_stmt(expr, &fn_name);
+            }
+        },
+        Expr::Block(expr) => {
+            if let Some(last_stmt) = expr.block.stmts.last_mut() {
+                if let Stmt::Expr(expr) = last_stmt {
+                    *expr = *get_action_variant(expr.clone(), fn_name.clone());
+                }
+            }
+        },
+        _ => {
+            *expr = verbatim! { Action::Return(#expr) };
+        }
+    }
+}
+
 struct StmtVisitor {
     fn_name: Ident,
 }
 
 impl VisitMut for StmtVisitor {
     fn visit_expr_mut(&mut self, node: &mut Expr) {
-        match node {
-            Expr::Match(expr) => expr.arms.iter_mut().for_each(|arm| {
-                arm.body = get_action_variant(*arm.body.clone(), self.fn_name.clone());
-            }),
-            _ => {
-                *node = verbatim! { Action::Return(#node) };
-            }
-        }
+        process_last_stmt(node, &self.fn_name);
     }
 }
 

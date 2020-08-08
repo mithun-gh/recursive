@@ -7,12 +7,13 @@ fn sum(n: u64, a: u64) -> u64 {
         _ => sum(n - 1, n + a),
     }
 }
-
+ 
 #[recursive]
 fn factorial(n: u64, a: u64) -> u64 {
-    match n {
-        0 => a,
-        _ => factorial(n - 1, n * a),
+    if n == 0 {
+        a
+    } else {
+        factorial(n - 1, n * a)
     }
 }
 
