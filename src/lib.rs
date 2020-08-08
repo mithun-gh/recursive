@@ -7,6 +7,58 @@ use syn::token::Comma;
 use syn::visit_mut::VisitMut;
 use syn::*;
 
+#[proc_macro_attribute]
+pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    let mut item = parse_macro_input!(item as ItemFn);
+    let mut last_stmt = item.block.stmts.last().unwrap().clone();
+
+    let mut fn_visitor = FnVisitor {
+        fn_name: item.sig.ident.clone(),
+    };
+    let mut stmt_visitor = StmtVisitor {
+        fn_name: item.sig.ident.clone(),
+    };
+
+    fn_visitor.visit_item_fn_mut(&mut item);
+    stmt_visitor.visit_stmt_mut(&mut last_stmt);
+
+    let fn_name = item.sig.ident.clone();
+    let fn_name_inner = format_ident!("{}_inner", fn_name);
+    let inputs = item.sig.inputs.clone();
+    let input_pats = extract_fn_arg_pats(item.sig.inputs.clone());
+    let input_types = extract_fn_arg_types(item.sig.inputs.clone());
+    let return_type = extract_return_type(item.sig.output.clone());
+    let mut fn_body = item.block.clone();
+
+    let fn_body_last_stmt = fn_body.stmts.last_mut().unwrap();
+    *fn_body_last_stmt = last_stmt;
+
+    let iter_fn = quote! {
+        fn #fn_name(#inputs) -> #return_type {
+            enum Action<C, R> {
+                Continue(C),
+                Return(R),
+            }
+
+            fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
+                -> Action<(#(#input_types),*), #return_type>
+                #fn_body
+
+            let mut acc = (#(#input_pats),*);
+            loop {
+                match #fn_name_inner(acc) {
+                    Action::Return(r) => return r,
+                    Action::Continue(c) => acc = c,
+                }
+            }
+        }
+    };
+
+    // println!("{}", iter_fn);
+
+    iter_fn.into()
+}
+
 macro_rules! verbatim {
     (some, $($tokens:tt)*) => {
         Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
@@ -26,6 +78,16 @@ struct FnVisitor {
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
         transform_expr_return(node, &self.fn_name);
+    }
+}
+
+struct StmtVisitor {
+    fn_name: Ident,
+}
+
+impl VisitMut for StmtVisitor {
+    fn visit_expr_mut(&mut self, node: &mut Expr) {
+        transform_expr(node, &self.fn_name);
     }
 }
 
@@ -82,68 +144,6 @@ fn transform_expr(expr: &mut Expr, fn_name: &Ident) {
             *expr = verbatim! { Action::Return(#expr) };
         }
     }
-}
-
-struct StmtVisitor {
-    fn_name: Ident,
-}
-
-impl VisitMut for StmtVisitor {
-    fn visit_expr_mut(&mut self, node: &mut Expr) {
-        transform_expr(node, &self.fn_name);
-    }
-}
-
-#[proc_macro_attribute]
-pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut item = parse_macro_input!(item as ItemFn);
-    let mut last_stmt = item.block.stmts.last().unwrap().clone();
-
-    let mut fn_visitor = FnVisitor {
-        fn_name: item.sig.ident.clone(),
-    };
-    let mut stmt_visitor = StmtVisitor {
-        fn_name: item.sig.ident.clone(),
-    };
-
-    fn_visitor.visit_item_fn_mut(&mut item);
-    stmt_visitor.visit_stmt_mut(&mut last_stmt);
-
-    let fn_name = item.sig.ident.clone();
-    let fn_name_inner = format_ident!("{}_inner", fn_name);
-    let inputs = item.sig.inputs.clone();
-    let input_pats = extract_fn_arg_pats(item.sig.inputs.clone());
-    let input_types = extract_fn_arg_types(item.sig.inputs.clone());
-    let return_type = extract_return_type(item.sig.output.clone());
-    let mut fn_body = item.block.clone();
-
-    let fn_body_last_stmt = fn_body.stmts.last_mut().unwrap();
-    *fn_body_last_stmt = last_stmt;
-
-    let iter_fn = quote! {
-        fn #fn_name(#inputs) -> #return_type {
-            enum Action<C, R> {
-                Continue(C),
-                Return(R),
-            }
-
-            fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
-                -> Action<(#(#input_types),*), #return_type>
-                #fn_body
-
-            let mut acc = (#(#input_pats),*);
-            loop {
-                match #fn_name_inner(acc) {
-                    Action::Return(r) => return r,
-                    Action::Continue(c) => acc = c,
-                }
-            }
-        }
-    };
-
-    // println!("{}", iter_fn);
-
-    iter_fn.into()
 }
 
 fn extract_fn_arg_pat(arg: FnArg) -> Pat {
