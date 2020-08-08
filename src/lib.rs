@@ -25,7 +25,7 @@ struct FnVisitor {
 
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
-        process_return_stmt(node, &self.fn_name);
+        transform_expr_return(node, &self.fn_name);
     }
 }
 
@@ -46,14 +46,14 @@ fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
     }
 }
 
-fn process_return_stmt(node: &mut ExprReturn, fn_name: &Ident) {
+fn transform_expr_return(node: &mut ExprReturn, fn_name: &Ident) {
     node.expr = match node.expr.clone() {
         None => verbatim!(some, Action::Return(())),
         Some(some_expr) => Some(get_action_variant(*some_expr, fn_name.clone())),
     };
 }
 
-fn process_last_stmt(expr: &mut Expr, fn_name: &Ident) {
+fn transform_expr(expr: &mut Expr, fn_name: &Ident) {
     match expr {
         Expr::Match(expr) => expr.arms.iter_mut().for_each(|arm| {
             arm.body = get_action_variant(*arm.body.clone(), fn_name.clone());
@@ -65,7 +65,7 @@ fn process_last_stmt(expr: &mut Expr, fn_name: &Ident) {
                 }
             }
             if let Some((_, ref mut expr)) = &mut expr.else_branch {
-                process_last_stmt(expr, &fn_name);
+                transform_expr(expr, &fn_name);
             }
         },
         Expr::Block(expr) => {
@@ -87,7 +87,7 @@ struct StmtVisitor {
 
 impl VisitMut for StmtVisitor {
     fn visit_expr_mut(&mut self, node: &mut Expr) {
-        process_last_stmt(node, &self.fn_name);
+        transform_expr(node, &self.fn_name);
     }
 }
 
