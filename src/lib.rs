@@ -106,8 +106,15 @@ fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
                 let args = expr_call.args;
                 verbatim!(boxed, Action::Continue((#args)))
             }
-        }
-        _ => verbatim!(boxed, Action::Return(#expr)),
+        },
+        _ => {
+            if let Expr::Return(_) = expr {
+                // ignore ExprReturn as it's handled seperately
+                Box::new(expr)
+            } else { 
+                verbatim!(boxed, Action::Return(#expr))
+            }
+        },
     }
 }
 
