@@ -8,11 +8,11 @@ use syn::visit_mut::VisitMut;
 use syn::*;
 
 macro_rules! verbatim {
+    (some, $($tokens:tt)*) => {
+        Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
+    };
     (boxed, $($tokens:tt)*) => {
         Box::new(Expr::Verbatim(quote! { $($tokens)* }))
-    };
-    (option, $($tokens:tt)*) => {
-        Some(Box::new(Expr::Verbatim(quote! { $($tokens)* })))
     };
     ($($tokens:tt)*) => {
         Expr::Verbatim(quote! { $($tokens)* })
@@ -26,7 +26,7 @@ struct FnVisitor {
 impl VisitMut for FnVisitor {
     fn visit_expr_return_mut(&mut self, node: &mut ExprReturn) {
         node.expr = match node.expr.clone() {
-            None => verbatim!(option, Action::Return(())),
+            None => verbatim!(some, Action::Return(())),
             Some(some_expr) => Some(get_action_variant(*some_expr, self.fn_name.clone())),
         };
     }
