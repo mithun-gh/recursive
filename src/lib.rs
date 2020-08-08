@@ -75,6 +75,9 @@ fn transform_expr(expr: &mut Expr, fn_name: &Ident) {
                 }
             }
         },
+        Expr::Return(expr) => {
+            transform_expr_return(expr, &fn_name);
+        },
         _ => {
             *expr = verbatim! { Action::Return(#expr) };
         }
