@@ -57,7 +57,7 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
-    // println!("{}", iter_fn);
+    println!("{}", iter_fn);
 
     iter_fn.into()
 }
@@ -94,46 +94,59 @@ impl VisitMut for StmtVisitor {
     }
 }
 
-fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
-    match expr {
-        Expr::Call(expr_call) => {
-            let func = expr_call.func.clone();
-            let func_id: Ident = parse_quote!(#func);
+// fn get_action_variant(expr: Expr, fn_name: Ident) -> Box<Expr> {
+//     match expr {
+//         Expr::Call(expr_call) => {
+//             let func = expr_call.func.clone();
+//             let func_id: Ident = parse_quote!(#func);
 
-            if func_id != fn_name {
-                verbatim!(boxed, Action::Return(#expr_call))
-            } else {
-                let args = expr_call.args;
-                verbatim!(boxed, Action::Continue((#args)))
-            }
-        },
-        _ => {
-            if let Expr::Return(_) = expr {
-                // ignore ExprReturn as it's handled seperately
-                Box::new(expr)
-            } else { 
-                verbatim!(boxed, Action::Return(#expr))
-            }
-        },
-    }
-}
+//             if func_id != fn_name {
+//                 verbatim!(boxed, Action::Return(#expr_call))
+//             } else {
+//                 let args = expr_call.args;
+//                 verbatim!(boxed, Action::Continue((#args)))
+//             }
+//         },
+//         _ => {
+//             if let Expr::Return(_) = expr {
+//                 // ignore ExprReturn as it's handled seperately
+//                 Box::new(expr)
+//             } else { 
+//                 verbatim!(boxed, Action::Return(#expr))
+//             }
+//         },
+//     }
+// }
 
 fn transform_expr_return(node: &mut ExprReturn, fn_name: &Ident) {
-    node.expr = match node.expr.clone() {
-        None => verbatim!(some, Action::Return(())),
-        Some(some_expr) => Some(get_action_variant(*some_expr, fn_name.clone())),
+    match node.expr.clone() {
+        None => node.expr = verbatim!(some, Action::Return(())),
+        Some(mut some_expr) => transform_expr(&mut some_expr, &fn_name),
     };
 }
 
 fn transform_expr(expr: &mut Expr, fn_name: &Ident) {
     match expr {
+        Expr::Call(expr_call) => {
+            let func = expr_call.func.clone();
+            let func_id: Ident = parse_quote!(#func);
+
+            if func_id != *fn_name {
+                *expr = verbatim! { Action::Return(#expr_call) };
+            } else {
+                let args = expr_call.args.clone();
+                *expr = verbatim! { Action::Continue((#args)) };
+            }
+        },
         Expr::Match(expr) => expr.arms.iter_mut().for_each(|arm| {
-            arm.body = get_action_variant(*arm.body.clone(), fn_name.clone());
+            transform_expr(&mut arm.body, &fn_name);
+            // arm.body = get_action_variant(*arm.body.clone(), fn_name.clone());
         }),
         Expr::If(expr) => {
             if let Some(last_stmt) = expr.then_branch.stmts.last_mut() {
                 if let Stmt::Expr(expr) = last_stmt {
-                    *expr = *get_action_variant(expr.clone(), fn_name.clone());
+                    transform_expr(expr, &fn_name);
+                    // *expr = *get_action_variant(expr.clone(), fn_name.clone());
                 }
             }
             if let Some((_, ref mut expr)) = &mut expr.else_branch {
@@ -143,7 +156,8 @@ fn transform_expr(expr: &mut Expr, fn_name: &Ident) {
         Expr::Block(expr) => {
             if let Some(last_stmt) = expr.block.stmts.last_mut() {
                 if let Stmt::Expr(expr) = last_stmt {
-                    *expr = *get_action_variant(expr.clone(), fn_name.clone());
+                    transform_expr(expr, &fn_name);
+                    // *expr = *get_action_variant(expr.clone(), fn_name.clone());
                 }
             }
         },
