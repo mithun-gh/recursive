@@ -25,7 +25,7 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let inputs = item.sig.inputs.clone();
     let (input_pats, input_types) = item.sig.split_inputs();
     let return_type = item.sig.extract_return_type();
-    let mut fn_body = item.block.clone();
+    let mut fn_body = item.block;
 
     let fn_body_last_stmt = fn_body.stmts.last_mut().unwrap();
     *fn_body_last_stmt = last_stmt;
