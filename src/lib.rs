@@ -1,6 +1,10 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{punctuated::Punctuated, token::Comma, visit_mut::VisitMut, *};
+use syn::{fold::Fold, visit_mut::VisitMut, *};
+
+mod utils;
+
+use crate::utils::SignatureExtensions;
 
 #[proc_macro_attribute]
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -19,9 +23,8 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_name = item.sig.ident.clone();
     let fn_name_inner = format_ident!("{}_inner", fn_name);
     let inputs = item.sig.inputs.clone();
-    let input_pats = extract_fn_arg_pats(item.sig.inputs.clone());
-    let input_types = extract_fn_arg_types(item.sig.inputs.clone());
-    let return_type = extract_return_type(item.sig.output.clone());
+    let (input_pats, input_types) = item.sig.split_inputs();
+    let return_type = item.sig.extract_return_type();
     let mut fn_body = item.block.clone();
 
     let fn_body_last_stmt = fn_body.stmts.last_mut().unwrap();
@@ -67,6 +70,24 @@ macro_rules! verbatim {
 
 struct RecursionTransformer {
     fn_name: Ident,
+}
+
+impl Fold for RecursionTransformer {
+    fn fold_item_fn(&mut self, item_fn: ItemFn) -> ItemFn {
+        let ItemFn {
+            attrs,
+            vis,
+            sig,
+            block,
+        } = item_fn;
+
+        ItemFn {
+            attrs,
+            vis,
+            sig,
+            block,
+        }
+    }
 }
 
 impl RecursionTransformer {
@@ -129,36 +150,5 @@ impl VisitMut for RecursionTransformer {
 
     fn visit_expr_mut(&mut self, node: &mut Expr) {
         self.transform_expr(node);
-    }
-}
-
-fn extract_fn_arg_pat(arg: FnArg) -> Pat {
-    match arg {
-        FnArg::Typed(pt) => *pt.pat,
-        _ => panic!("not supported on the receiver type `self`"),
-    }
-}
-
-fn extract_fn_arg_pats(args: Punctuated<FnArg, Comma>) -> Vec<Pat> {
-    args.into_iter().map(extract_fn_arg_pat).collect::<Vec<_>>()
-}
-
-fn extract_fn_arg_type(arg: FnArg) -> Type {
-    match arg {
-        FnArg::Typed(pt) => *pt.ty,
-        _ => panic!("not supported on the receiver type `self`"),
-    }
-}
-
-fn extract_fn_arg_types(args: Punctuated<FnArg, Comma>) -> Vec<Type> {
-    args.into_iter()
-        .map(extract_fn_arg_type)
-        .collect::<Vec<_>>()
-}
-
-fn extract_return_type(output: ReturnType) -> Type {
-    match output {
-        ReturnType::Default => Type::Verbatim(quote! { () }),
-        ReturnType::Type(_, return_type) => *return_type,
     }
 }
