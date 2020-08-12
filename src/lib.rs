@@ -20,9 +20,9 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     transformer.visit_stmt_mut(&mut last_stmt);
 
-    let fn_name = item.sig.ident.clone();
+    let fn_name = &item.sig.ident;
     let fn_name_inner = format_ident!("{}_inner", fn_name);
-    let inputs = item.sig.inputs.clone();
+    let inputs = &item.sig.inputs;
     let (input_pats, input_types) = item.sig.split_inputs();
     let return_type = item.sig.extract_return_type();
     let mut fn_body = item.block;
