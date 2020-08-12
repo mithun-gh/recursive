@@ -1,11 +1,6 @@
-#![allow(unused)]
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::punctuated::Punctuated;
-use syn::token::Comma;
-use syn::visit_mut::VisitMut;
-use syn::*;
+use syn::{punctuated::Punctuated, token::Comma, visit_mut::VisitMut, *};
 
 #[proc_macro_attribute]
 pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
