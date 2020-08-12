@@ -112,6 +112,15 @@ impl RecursionTransformer {
                     *expr = verbatim! { Action::Continue((#args)) };
                 }
             }
+            Expr::MethodCall(expr_method_call) => {
+                let func_id = expr_method_call.method.clone();
+                if func_id != self.fn_name {
+                    *expr = verbatim! { Action::Return(#expr_method_call) };
+                } else {
+                    let args = expr_method_call.args.clone();
+                    *expr = verbatim! { Action::Continue((#args)) };
+                }
+            }
             Expr::Match(expr) => expr.arms.iter_mut().for_each(|arm| {
                 self.transform_expr(&mut arm.body);
             }),

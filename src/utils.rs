@@ -16,7 +16,7 @@ impl SignatureExtensions for Signature {
                     acc.1.push(*pt.ty);
                     (acc.0, acc.1)
                 }
-                _ => panic!("receiver type, `self`, is not supported."),
+                _ => acc, // `self`
             })
     }
 
