@@ -7,27 +7,12 @@ mod utils;
 use crate::utils::SignatureExtensions;
 
 #[proc_macro_attribute]
-pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let mut item = parse_macro_input!(item as ItemFn);
+pub fn recursive(_attr: TokenStream, item_fn: TokenStream) -> TokenStream {
+    let item_fn = parse_macro_input!(item_fn as ItemFn);
+    let mut transformer = RecursionTransformer::new(item_fn);
+    let item_fn = transformer.transform_item_fn();
 
-    let mut transformer = RecursionTransformer {
-        fn_name: item.sig.ident.clone(),
-    };
-
-    transformer.visit_item_fn_mut(&mut item);
-
-    let mut last_stmt = item.block.stmts.last().unwrap().clone();
-
-    transformer.visit_stmt_mut(&mut last_stmt);
-
-    let fn_body_last_stmt = item.block.stmts.last_mut().unwrap();
-    *fn_body_last_stmt = last_stmt;
-
-    let iter_fn = transformer.fold_item_fn(item);
-
-    // println!("{}", quote! { #iter_fn });
-
-    TokenStream::from(quote!(#iter_fn))
+    TokenStream::from(quote!(#item_fn))
 }
 
 macro_rules! verbatim {
@@ -43,7 +28,7 @@ macro_rules! verbatim {
 }
 
 struct RecursionTransformer {
-    fn_name: Ident,
+    item_fn: ItemFn
 }
 
 impl Fold for RecursionTransformer {
@@ -87,6 +72,25 @@ impl Fold for RecursionTransformer {
 }
 
 impl RecursionTransformer {
+    fn new(item_fn: ItemFn) -> Self {
+        RecursionTransformer { item_fn }
+    }
+
+    fn transform_item_fn(&mut self) -> ItemFn {
+        let mut item_fn = self.item_fn.clone();
+
+        // transform `return` expression
+        self.visit_item_fn_mut(&mut item_fn);
+
+        // transform last expression
+        let mut last_stmt = item_fn.block.stmts.last().unwrap().clone();
+        self.visit_stmt_mut(&mut last_stmt);
+        let fn_body_last_stmt = item_fn.block.stmts.last_mut().unwrap();
+        *fn_body_last_stmt = last_stmt;
+    
+        self.fold_item_fn(item_fn)
+    }
+
     fn transform_expr_return(&self, node: &mut ExprReturn) {
         if let Some(ref mut some_expr) = node.expr {
             self.transform_expr(some_expr);
@@ -96,12 +100,14 @@ impl RecursionTransformer {
     }
 
     fn transform_expr(&self, expr: &mut Expr) {
+        let fn_name = &self.item_fn.sig.ident;
+
         match expr {
             Expr::Call(expr_call) => {
                 let func = expr_call.func.clone();
                 let func_id: Ident = parse_quote!(#func);
 
-                if func_id != self.fn_name {
+                if func_id != *fn_name {
                     *expr = verbatim! { Action::Return(#expr_call) };
                 } else {
                     let args = expr_call.args.clone();
@@ -110,7 +116,7 @@ impl RecursionTransformer {
             }
             Expr::MethodCall(expr_method_call) => {
                 let func_id = expr_method_call.method.clone();
-                if func_id != self.fn_name {
+                if func_id != *fn_name {
                     *expr = verbatim! { Action::Return(#expr_method_call) };
                 } else {
                     let args = expr_method_call.args.clone();
