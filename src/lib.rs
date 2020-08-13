@@ -20,40 +20,14 @@ pub fn recursive(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     transformer.visit_stmt_mut(&mut last_stmt);
 
-    let fn_name = &item.sig.ident;
-    let fn_name_inner = format_ident!("{}_inner", fn_name);
-    let inputs = &item.sig.inputs;
-    let (input_pats, input_types) = item.sig.split_inputs();
-    let return_type = item.sig.extract_return_type();
-    let mut fn_body = item.block;
-
-    let fn_body_last_stmt = fn_body.stmts.last_mut().unwrap();
+    let fn_body_last_stmt = item.block.stmts.last_mut().unwrap();
     *fn_body_last_stmt = last_stmt;
 
-    let iter_fn = quote! {
-        fn #fn_name(#inputs) -> #return_type {
-            enum Action<C, R> {
-                Continue(C),
-                Return(R),
-            }
+    let iter_fn = transformer.fold_item_fn(item);
 
-            fn #fn_name_inner((#(#input_pats),*): (#(#input_types),*))
-                -> Action<(#(#input_types),*), #return_type>
-                #fn_body
+    // println!("{}", quote! { #iter_fn });
 
-            let mut acc = (#(#input_pats),*);
-            loop {
-                match #fn_name_inner(acc) {
-                    Action::Return(r) => return r,
-                    Action::Continue(c) => acc = c,
-                }
-            }
-        }
-    };
-
-    // println!("{}", iter_fn);
-
-    iter_fn.into()
+    TokenStream::from(quote!(#iter_fn))
 }
 
 macro_rules! verbatim {
@@ -80,6 +54,28 @@ impl Fold for RecursionTransformer {
             sig,
             block,
         } = item_fn;
+
+        let fn_inner = format_ident!("{}_inner", sig.ident);
+        let (input_pats, input_types) = sig.split_inputs();
+        let return_type = sig.extract_return_type();
+
+        let block = parse_quote! {{
+            enum Action<C, R> {
+                Continue(C),
+                Return(R),
+            }
+
+            fn #fn_inner((#(#input_pats),*): (#(#input_types),*))
+                -> Action<(#(#input_types),*), #return_type> #block
+
+            let mut acc = (#(#input_pats),*);
+            loop {
+                match #fn_inner(acc) {
+                    Action::Return(r) => return r,
+                    Action::Continue(c) => acc = c,
+                }
+            }
+        }};
 
         ItemFn {
             attrs,
