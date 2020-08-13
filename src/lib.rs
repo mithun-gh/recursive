@@ -28,7 +28,7 @@ macro_rules! verbatim {
 }
 
 struct RecursionTransformer {
-    item_fn: ItemFn
+    item_fn: ItemFn,
 }
 
 impl Fold for RecursionTransformer {
@@ -87,7 +87,7 @@ impl RecursionTransformer {
         self.visit_stmt_mut(&mut last_stmt);
         let fn_body_last_stmt = item_fn.block.stmts.last_mut().unwrap();
         *fn_body_last_stmt = last_stmt;
-    
+
         self.fold_item_fn(item_fn)
     }
 
