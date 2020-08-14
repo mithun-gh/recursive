@@ -33,12 +33,7 @@ struct RecursionTransformer {
 
 impl Fold for RecursionTransformer {
     fn fold_item_fn(&mut self, item_fn: ItemFn) -> ItemFn {
-        let ItemFn {
-            attrs,
-            vis,
-            sig,
-            block,
-        } = item_fn;
+        let ItemFn { sig, block, .. } = item_fn;
 
         let fn_inner = format_ident!("{}_inner", sig.ident);
         let (input_pats, input_types) = sig.split_inputs();
@@ -63,11 +58,18 @@ impl Fold for RecursionTransformer {
         }};
 
         ItemFn {
-            attrs,
-            vis,
             sig,
             block,
+            ..item_fn
         }
+    }
+
+    fn fold_expr_return(&mut self, expr_return: ExprReturn) -> ExprReturn {
+        expr_return
+    }
+
+    fn fold_expr(&mut self, expr: Expr) -> Expr {
+        expr
     }
 }
 
