@@ -65,7 +65,17 @@ impl Fold for RecursionTransformer {
     }
 
     fn fold_expr_return(&mut self, expr_return: ExprReturn) -> ExprReturn {
-        expr_return
+        let ExprReturn { expr, .. } = expr_return;
+
+        let expr = match expr {
+            Some(expr) => self.fold_expr(*expr),
+            None => verbatim! { Action::Return(()) },
+        };
+
+        ExprReturn {
+            expr: Some(Box::new(expr)),
+            ..expr_return
+        }
     }
 
     fn fold_expr(&mut self, expr: Expr) -> Expr {
