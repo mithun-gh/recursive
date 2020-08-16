@@ -12,6 +12,8 @@ pub fn recursive(_attr: TokenStream, item_fn: TokenStream) -> TokenStream {
     let mut transformer = RecursionTransformer::new(item_fn);
     let item_fn = transformer.transform_item_fn();
 
+    // println!("{}", quote! { #item_fn });
+
     TokenStream::from(quote!(#item_fn))
 }
 
@@ -79,7 +81,31 @@ impl Fold for RecursionTransformer {
     }
 
     fn fold_expr(&mut self, expr: Expr) -> Expr {
-        expr
+        match expr {
+            Expr::Call(expr_call) => {
+                let func = &*expr_call.func;
+                let func_ident: Ident = parse_quote!(#func);
+
+                if func_ident != self.item_fn.sig.ident {
+                    verbatim! { Action::Return(#expr_call) }
+                } else {
+                    let args = &expr_call.args;
+                    verbatim! { Action::Continue((#args)) }
+                }
+            },
+            Expr::MethodCall(expr_method_call) => {
+                let func_ident = &expr_method_call.method;
+
+                if *func_ident != self.item_fn.sig.ident {
+                    verbatim! { Action::Return(#expr_method_call) }
+                } else {
+                    let args = &expr_method_call.args;
+                    verbatim! { Action::Continue((#args)) }
+                }
+            },
+            Expr::Verbatim(_) => expr,
+            _ => verbatim! { Action::Return(#expr) }
+        }
     }
 }
 
